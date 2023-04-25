@@ -2,6 +2,7 @@ package peer
 
 import (
 	"bufio"
+	"crypto/rand"
 	"fmt"
 	"log"
 	"net"
@@ -9,6 +10,20 @@ import (
 )
 
 func Server(port string) {
+
+	// Prompt user for password
+	var password string
+	fmt.Print("Enter password: ")
+	fmt.Scan(&password)
+
+	// Generate random salt
+	salt := make([]byte, 32)
+	_, err := rand.Read(salt)
+	if err != nil {
+		log.Printf("%v\n", err)
+		return
+	}
+
 	// Listen for connection
 	addr := "localhost:" + port
 	listener, err := net.Listen("tcp", addr)
@@ -20,7 +35,7 @@ func Server(port string) {
 
 	fmt.Printf("Listening for connection on %s\n", addr)
 
-	// Accpet connection
+	// Accept connection
 	conn, err := listener.Accept()
 	if err != nil {
 		log.Printf("Error: Could not accept connection from client: %v\n", err)
@@ -31,13 +46,24 @@ func Server(port string) {
 	fmt.Println("Accepted connection")
 
 	// Read messages
-	go handleMessages(conn)
+	go handleMessages(conn, []byte(password))
 
 	// Send messages
 	s := bufio.NewScanner(os.Stdin)
 	for s.Scan() {
 		m := s.Text()
-		fmt.Fprintf(conn, "Alice: %s\n", m)
+
+		// Encrypt message
+		ciphertext, err := Encrypt([]byte(m), []byte(password))
+		if err != nil {
+			log.Printf("%v\n", err)
+			return
+		}
+
+		fmt.Printf("Sending encrypetd message: %q\n", ciphertext)
+
+		// Send encrypted message
+		fmt.Fprintf(conn, "%s\n", ciphertext)
 	}
 
 	if err := s.Err(); err != nil {
@@ -46,6 +72,20 @@ func Server(port string) {
 }
 
 func Client(port string) {
+
+	// Prompt user for password
+	var password string
+	fmt.Print("Enter password: ")
+	fmt.Scan(&password)
+
+	// Generate random salt
+	salt := make([]byte, 32)
+	_, err := rand.Read(salt)
+	if err != nil {
+		log.Printf("%v\n", err)
+		return
+	}
+
 	// Connect
 	addr := "localhost:" + port
 	conn, err := net.Dial("tcp", addr)
@@ -58,13 +98,24 @@ func Client(port string) {
 	fmt.Printf("Connected to %s\n", addr)
 
 	// Read messages
-	go handleMessages(conn)
+	go handleMessages(conn, []byte(password))
 
 	// Send messages
 	s := bufio.NewScanner(os.Stdin)
 	for s.Scan() {
 		m := s.Text()
-		fmt.Fprintf(conn, "Bob: %s\n", m)
+
+		// Encrypt message
+		ciphertext, err := Encrypt([]byte(m), []byte(password))
+		if err != nil {
+			log.Printf("%v\n", err)
+			return
+		}
+
+		fmt.Printf("Sending encrypetd message: %q\n", ciphertext)
+
+		// Send encrypted message
+		fmt.Fprintf(conn, "%s\n", ciphertext)
 	}
 
 	if err := s.Err(); err != nil {
@@ -72,11 +123,19 @@ func Client(port string) {
 	}
 }
 
-func handleMessages(conn net.Conn) {
+func handleMessages(conn net.Conn, password []byte) {
 	s := bufio.NewScanner(conn)
 	for s.Scan() {
-		m := s.Text()
-		fmt.Printf("%s\n", m)
+		c := s.Text()
+		fmt.Printf("Received encrypetd message: %q\n", c)
+		// Decrypt the message
+		plaintext, err := Decrypt(c, []byte(password))
+
+		if err != nil {
+			panic(err)
+		}
+
+		fmt.Printf("%s\n", plaintext)
 	}
 
 	if err := s.Err(); err != nil {
