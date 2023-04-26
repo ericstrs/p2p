@@ -129,7 +129,7 @@ func handleMessages(conn net.Conn, password []byte) {
 		c := s.Text()
 		fmt.Printf("Received encrypetd message: %q\n", c)
 		// Decrypt the message
-		plaintext, err := Decrypt(c, []byte(password))
+		plaintext, err := Decrypt([]byte(c), []byte(password))
 
 		if err != nil {
 			panic(err)

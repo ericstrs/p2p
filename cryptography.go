@@ -6,7 +6,6 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -20,83 +19,61 @@ func generateKey(password []byte, salt []byte) []byte {
 	return key
 }
 
-func Encrypt(plaintext []byte, password []byte) (string, error) {
+func Encrypt(plaintext []byte, password []byte) ([]byte, error) {
 	// Generate new salt
 	salt := make([]byte, 16)
 	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
-		return "", err
+		return nil, err
 	}
 
 	// Generate new key
 	key := generateKey(password, salt)
-	fmt.Printf("Enc's key: %x\n", key)
-
-	// Check key size
-	if len(key) != 32 {
-		return "", errors.New("key size if ont 256 bits")
-	}
-
-	// Create a AES cipher block using the key
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return "", err
-	}
-
-	// Generate a new IV
-	iv := make([]byte, 16+len(salt))
-	_, err = io.ReadFull(rand.Reader, iv[:16])
-	if err != nil {
-		return "", err
-	}
-	copy(iv[16:], salt)
-
-	// Encrypt the plaintext
-	mode := cipher.NewCBCEncrypter(block, iv[:16])
-	paddedPlaintext := pkcs7Padding(plaintext, len(key))
-
-	fmt.Printf("\n")
-	fmt.Printf("Padded plaintext size: %d\n", len(paddedPlaintext))
-	ciphertext := make([]byte, len(paddedPlaintext))
-	mode.CryptBlocks(ciphertext, paddedPlaintext)
-	fmt.Printf("Encrypted text size: %d\n", len(ciphertext))
-	fmt.Printf("Padding size:: %d\n", len(paddedPlaintext)-len(plaintext))
-	fmt.Printf("\n")
-
-	saltIvCipher := make([]byte, len(iv)+len(ciphertext))
-	copy(saltIvCipher, iv)
-	copy(saltIvCipher[len(iv):], ciphertext)
-
-	// Encode the ciphertext
-	encodedText := base64.StdEncoding.EncodeToString(saltIvCipher)
-
-	return encodedText, nil
-}
-
-func Decrypt(encodedText string, password []byte) ([]byte, error) {
-	saltIvCipher, err := base64.StdEncoding.DecodeString(encodedText)
-	if err != nil {
-		return nil, err
-	}
-
-	//fmt.Println("Start of decrypt:", saltIvCipher)
-	salt := saltIvCipher[16:32]
-	//fmt.Println("salt:", salt)
-	key := generateKey(password, salt)
-	fmt.Printf("Dec's key: %x\n", key)
 
 	// Check key size
 	if len(key) != 32 {
 		return nil, errors.New("key size is not 256 bits")
 	}
 
-	// Check length of encrypted message
-	if len(saltIvCipher) < aes.BlockSize {
-		return nil, errors.New("encrypted text length is invalid")
+	// Create a AES cipher block using the key
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
 	}
 
-	// Extract the IV from the ciphertext
-	iv := saltIvCipher[:16]
-	encryptedText := saltIvCipher[16:]
+	// Generate a new IV
+	iv := make([]byte, 16)
+	_, err = io.ReadFull(rand.Reader, iv)
+	if err != nil {
+		return nil, err
+	}
+
+	// Encrypt the plaintext
+	mode := cipher.NewCBCEncrypter(block, iv)
+	paddedPlaintext := pkcs7Padding(plaintext, aes.BlockSize)
+	ciphertext := make([]byte, len(paddedPlaintext))
+	mode.CryptBlocks(ciphertext, paddedPlaintext)
+
+	output := make([]byte, 0, len(salt)+len(iv)+len(ciphertext))
+	output = append(output, salt...)
+	output = append(output, iv...)
+	output = append(output, ciphertext...)
+
+	return output, nil
+}
+
+func Decrypt(ciphertext []byte, password []byte) ([]byte, error) {
+	// Extract the salt and IV from ciphertext
+	salt := ciphertext[:16]
+	iv := ciphertext[16:32]
+	ciphertext = ciphertext[32:]
+
+	// Generate key from password and salt
+	key := generateKey(password, salt)
+
+	// Check key size
+	if len(key) != 32 {
+		return nil, errors.New("key size is not 256 bits")
+	}
 
 	// Create AES cipher block using the key
 	block, err := aes.NewCipher(key)
@@ -106,37 +83,63 @@ func Decrypt(encodedText string, password []byte) ([]byte, error) {
 
 	// Decrypt the ciphertext using AES CBC mode
 	mode := cipher.NewCBCDecrypter(block, iv)
-	decryptedText := make([]byte, len(encryptedText))
-	mode.CryptBlocks(decryptedText, encryptedText)
+	plaintext := make([]byte, len(ciphertext))
+	mode.CryptBlocks(plaintext, ciphertext)
 
 	// Remove the padding
-	unpaddedText, err := pkcs7Unpadding(decryptedText)
+	unpaddedPlaintext, err := pkcs7Unpadding(plaintext)
 	if err != nil {
 		return nil, err
 	}
 
-	return unpaddedText, nil
+	return unpaddedPlaintext, nil
 }
-
-/*
-func pkcs7Padding(plaintext []byte, blockSize int) []byte {
-	padding := blockSize - len(plaintext)%blockSize
-	padText := make([]byte, len(plaintext)+padding)
-	copy(padText, plaintext)
-	for i := len(plaintext); i < len(padText); i++ {
-		padText[i] = byte(padding)
-	}
-	fmt.Println("paddedText siz:", len(padText))
-	fmt.Println("last byte of padded text", padText[len(padText)-1])
-
-	return padText
-}*/
 
 func pkcs7Padding(plaintext []byte, paddingSize int) []byte {
 	padSize := paddingSize - (len(plaintext) % paddingSize)
 	padding := bytes.Repeat([]byte{byte(padSize)}, padSize)
 	return append(plaintext, padding...)
 }
+
+/*
+func pkcs7Padding(plaintext []byte, blockSize int) []byte {
+	r := len(plaintext) % blockSize
+	pl := blockSize - r
+	for i := 0; i < pl; i++ {
+		plaintext = append(plaintext, byte(pl))
+	}
+	return plaintext
+}
+
+func pkcs7Unpadding(plaintext []byte) ([]byte, error) {
+	if plaintext == nil || len(plaintext) == 0 {
+		return nil, nil
+	}
+
+	pl := int(plaintext[len(plaintext)-1])
+
+	err := checkPadding(plaintext, pl)
+	if err != nil {
+		return nil, err
+	}
+
+	return plaintext[:len(plaintext)-pl], nil
+}
+
+func checkPadding(plaintext []byte, paddingLen int) error {
+	if len(plaintext) < paddingLen {
+		return errors.New("invalid padding length of plaintext smaller than padding length")
+	}
+	p := plaintext[len(plaintext)-paddingLen:]
+	for _, pc := range p {
+		if uint(pc) != uint(len(p)) {
+			fmt.Println("trouble number:", pc)
+			return errors.New("invalid padding one of the padding values does not represent the padded value")
+		}
+	}
+	return nil
+}
+*/
 
 func pkcs7Unpadding(plaintext []byte) ([]byte, error) {
 	paddingSize := int(plaintext[len(plaintext)-1])
@@ -147,15 +150,3 @@ func pkcs7Unpadding(plaintext []byte) ([]byte, error) {
 
 	return plaintext[:len(plaintext)-paddingSize], nil
 }
-
-/*
-func pkcs7Unpadding(plaintext []byte) ([]byte, error) {
-	length := len(plaintext)
-	unpadding := int(plaintext[length-1])
-	if unpadding > length {
-		fmt.Printf("unpadding = %d, length %d\n", unpadding, length)
-		return nil, errors.New("invalid padding")
-	}
-	return plaintext[:(length - unpadding)], nil
-}
-*/

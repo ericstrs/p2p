@@ -31,11 +31,8 @@ func TestGenerateKey(t *testing.T) {
 func TestEncryptDecrypt(t *testing.T) {
 	plaintext := []byte("secret message")
 
-	fmt.Printf("Message: %s\n", plaintext)
-
 	// Encrypt the plaintext
 	encodedText, err := Encrypt(plaintext, []byte("password"))
-	fmt.Printf("Encrypted messaged: %s\n", encodedText)
 
 	if err != nil {
 		t.Fatalf("Encrypt failed: %v", err)
@@ -53,10 +50,8 @@ func TestEncryptDecrypt(t *testing.T) {
 		fmt.Printf("Got: %s\nExpected: %d\n", decodedText, plaintext)
 		t.Fatalf("Decoded text doesn't match plaintext")
 	}
-	fmt.Printf("Decrypted messaged: %s\n", decodedText)
 }
 
-/*
 func TestPaddingUnpadding(t *testing.T) {
 	plaintext := []byte("secret message")
 	blockSize := 16
@@ -86,4 +81,3 @@ func TestPaddingUnpadding(t *testing.T) {
 		t.Errorf("unpadded data was %q, expected %q", unpadded, plaintext)
 	}
 }
-*/
