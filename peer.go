@@ -29,12 +29,13 @@ func Server(port string) {
 	}
 	defer conn.Close()
 
-	fmt.Println("Accepted connection")
+	fmt.Printf("Accepted connection\n")
 
 	// Prompt user for password
 	var password string
 	fmt.Print("Enter password: ")
 	fmt.Scan(&password)
+	fmt.Println()
 
 	// Read messages
 	go handleMessages(conn, []byte(password))
@@ -82,6 +83,7 @@ func Client(port string) {
 	var password string
 	fmt.Print("Enter password: ")
 	fmt.Scan(&password)
+	fmt.Println()
 
 	// Read messages
 	go handleMessages(conn, []byte(password))
