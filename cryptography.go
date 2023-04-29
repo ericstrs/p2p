@@ -62,13 +62,18 @@ func Encrypt(plaintext []byte, password []byte) ([]byte, error) {
 }
 
 func Decrypt(ciphertext []byte, password []byte) ([]byte, error) {
+	if len(ciphertext) < 32 {
+		fmt.Printf("Ciphertext in question: %q\n", ciphertext)
+		return nil, errors.New("ciphertext too short")
+	}
+
 	// Extract the salt and IV from ciphertext
-	salt := ciphertext[:16]
+	s := ciphertext[:16]
 	iv := ciphertext[16:32]
 	ciphertext = ciphertext[32:]
 
 	// Generate key from password and salt
-	key := generateKey(password, salt)
+	key := generateKey(password, s)
 
 	// Check key size
 	if len(key) != 32 {
@@ -96,57 +101,21 @@ func Decrypt(ciphertext []byte, password []byte) ([]byte, error) {
 }
 
 func pkcs7Padding(plaintext []byte, paddingSize int) []byte {
+	// How many bytes to get to 16?
 	padSize := paddingSize - (len(plaintext) % paddingSize)
+	// Create a list of length `paddingSize` that consists of values all equal to `paddingSize`.
 	padding := bytes.Repeat([]byte{byte(padSize)}, padSize)
 	return append(plaintext, padding...)
 }
 
-/*
-func pkcs7Padding(plaintext []byte, blockSize int) []byte {
-	r := len(plaintext) % blockSize
-	pl := blockSize - r
-	for i := 0; i < pl; i++ {
-		plaintext = append(plaintext, byte(pl))
-	}
-	return plaintext
-}
-
 func pkcs7Unpadding(plaintext []byte) ([]byte, error) {
-	if plaintext == nil || len(plaintext) == 0 {
-		return nil, nil
-	}
-
-	pl := int(plaintext[len(plaintext)-1])
-
-	err := checkPadding(plaintext, pl)
-	if err != nil {
-		return nil, err
-	}
-
-	return plaintext[:len(plaintext)-pl], nil
-}
-
-func checkPadding(plaintext []byte, paddingLen int) error {
-	if len(plaintext) < paddingLen {
-		return errors.New("invalid padding length of plaintext smaller than padding length")
-	}
-	p := plaintext[len(plaintext)-paddingLen:]
-	for _, pc := range p {
-		if uint(pc) != uint(len(p)) {
-			fmt.Println("trouble number:", pc)
-			return errors.New("invalid padding one of the padding values does not represent the padded value")
-		}
-	}
-	return nil
-}
-*/
-
-func pkcs7Unpadding(plaintext []byte) ([]byte, error) {
+	// How many bytes need to be padded?
 	paddingSize := int(plaintext[len(plaintext)-1])
 	if paddingSize > len(plaintext) {
 		fmt.Printf("paddingsize= %d, length %d\n", paddingSize, len(plaintext))
 		return nil, errors.New("invalid padding")
 	}
 
+	// Returned the sliced array leaving out the padding
 	return plaintext[:len(plaintext)-paddingSize], nil
 }
