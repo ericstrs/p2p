@@ -1,4 +1,4 @@
-module github.com/iuiq/p2p/peer
+module github.com/ericstrs/p2p/peer
 
 go 1.19
 

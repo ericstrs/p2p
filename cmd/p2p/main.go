@@ -4,7 +4,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/iuiq/p2p/peer"
+	"github.com/ericstrs/p2p/peer"
 )
 
 func main() {
