@@ -1,30 +1,36 @@
 # Secure Instant Point-to-Point Messaging
 
-This secure instant point-to-point (P2P) messaging tool is suited for two parties where it is assumed they share a passphrase. The password is used the tool to correctly encrypt and decrypted messages shared between them.. The assumption of a shared secret (password) between the two parties makes it so that the benefits of symmetric key cryptography can be utilized. In this case, each message during Internet transmission is encrypted using the advanced encryption standard (AES) with a 256-bit key. Taking a broad overview, the tool works as follows: establish a connection between both parties, prompt for a message, generate a new key to encrypt the message, transmit the message, and decrypt the message upon reception.
+This secure instant point-to-point (P2P) messaging tool is suited for two parties where it is assumed they share a password. The password is used the tool to correctly encrypt and decrypted messages shared between them. The assumption of a shared secret (password) between the two parties makes it so that the benefits of symmetric key cryptography can be utilized. In this case, each message during Internet transmission is encrypted using the advanced encryption standard (AES) with a 256-bit key. Taking a broad overview, the tool works as follows: establish a connection between both parties, prompt for a message, generate a new key to encrypt the message, transmit the message, and decrypt the message upon reception.
 
-The main function first checks if the user inputs a valid role and a port number. The roles consist of server and client. The corresponding code goes as follows:
+The main function first checks if the user inputs a valid role. The roles consist of server and client. The corresponding code goes as follows:
 
 ```
 func main() {
-  if len(os.Args) != 3 {
-    log.Println("Usage: ./p2p <role> <port>")
-    return
+  // omitted error handling
+  role := os.Args[1]
+
+  host := "localhost"
+  port := "8080"
+
+  if len(os.Args) > 2 {
+    host = os.Args[2]
+  }
+  if len(os.Args) > 3 {
+    port = os.Args[3]
   }
 
-  role := os.Args[1]
-  port := os.Args[2]
-
-  if role == "server" {
-    peer.Server(port)
-  } else if role == "client" {
-    peer.Client(port)
-  } else {
-    log.Println("Invalid role specified. Valid roles are either 'server' or 'client'.")
+  switch strings.ToLower(role) {
+  case "server":
+    peer.Server(host, port)
+  case "client":
+    peer.Client(host, port)
+  default:
+    // omitted error handling
   }
 }
 ```
 
-Both the `peer.Server` and `peer.Client` function are reliant on a goroutine to concurrently run the `handleMessages` function to keep receiving messages from the client:
+Functions `peer.Server` and `peer.Client` are reliant upon on a goroutine to concurrently run the `handleMessages` function to keep receiving messages from the client:
 
 ```
 func handleMessages(conn net.Conn, password []byte) {
@@ -44,8 +50,6 @@ func handleMessages(conn net.Conn, password []byte) {
     // Remove newline
     ciphertext := buffer[:n-1]
 
-    fmt.Printf("Received ciphertext: %q\n", ciphertext)
-
     // Decrypt the ciphertext
     plaintext, err := Decrypt(ciphertext, []byte(password))
     if err != nil {
@@ -57,14 +61,16 @@ func handleMessages(conn net.Conn, password []byte) {
 }
 ```
 
-The `handleMessages` function takes in a connection and password as input. Waits ands read an encrypted message from the connection. The ciphertext and the password are then passed to the `Decrypt` function which returns the plaintext.
+The `handleMessages` function takes in a connection and password as input. Waits and reads an encrypted message from the connection. The ciphertext and the password are then passed to the `Decrypt` function which returns the plaintext.
+
+The `handleMessages` function waits until the connection receives an incoming ciphertext. Using the ciphertext and the password, a call is made to the `Decrypt` function to get the respective plaintext.
 
 The `peer.Server` function handles the server role:
 
 ```
-func Server(port string) {
+func Server(host, port string) {
   // Listen for connection
-  addr := "localhost:" + port
+  addr := host + ":" + port
   listener, err := net.Listen("tcp", addr)
   if err != nil {
     log.Printf("Error: Could not listen on %s: %v\n", addr, err)
@@ -110,7 +116,6 @@ func Server(port string) {
 
     // Send encrypted message
     fmt.Fprintf(conn, "%s\n", ciphertext)
-    fmt.Printf("Sent ciphertext: %q\n\n", ciphertext)
   }
 
   if err := s.Err(); err != nil {
@@ -119,15 +124,14 @@ func Server(port string) {
 }
 ```
 
-This function has a port argument to first listen to a connection. It then accepts a connection from the client. Once this connection has been established, the user is prompted for a password. A call to the goroutine `handleMessages` function is made to handle reading messages while the main thread can focus on sending messages to the client. The user is continually prompted for a messages, encrypts it, and transmits it to the client.
+Firstly, `Server` listens on the `port`. It then accepts a connection from the client. Once this connection has been established, the user is prompted for the shared password. A call to the goroutine `handleMessages` function is made to handle reading messages while the main thread can focus on prompting and sending messages to the client. The `handleMessages` function continually prompts the user for a message, encrypts it, and transmits it to the other party.
 
 The `peer.Client` function handles the client role:
 
 ```
-func Client(port string) {
-
+func Client(host, port string) {
   // Connect to server
-  addr := "localhost:" + port
+  addr := host + ":" + port
   conn, err := net.Dial("tcp", addr)
   if err != nil {
     log.Printf("Error: Could connect to %s: %v\n", addr, err)
@@ -171,18 +175,18 @@ func Client(port string) {
 }
 ```
 
-A connection is first made to the server. The user is prompted for the shared password. The goroutine `handleMessages` function is once again utilized to run a thread that reads incoming messages from the server. The user is then continually prompted for a message, encrypts it, and then transmits the message to server.
+A connection is first made to the server. The user is prompted for the shared password. The goroutine `handleMessages` function is once again used read incoming messages from the other party. The user is then continually prompted for a message, encrypts it, and then transmits the message to the other party.
 
-We now turn to the cryptography side to this tool. Since we assume a shared secret between the two parties, we are able to generate the same key for both parties. This is accomplished using a key derivation function (KDF) that takes as input the passphrase and produces a key. The KDF I went with is the Password-Based Key Derivation Function 2 (PBKKDF2). The PBKKDF2 takes in a passphrase and a salt to derive a secure encryption key. The `generateKey` function performs this:
+We now turn to the cryptographic part of this tool. Since we assume a shared secret between the two parties, we are able to generate the same private key for both parties. This is accomplished using a key derivation function (KDF) that takes as input the passphrase and produces a key. The KDF used in this tool is the Password-Based Key Derivation Function 2 (PBKKDF2). The PBKKDF2 takes in a passphrase and a salt to derive a secure encryption key. The `generateKey` function is shown below:
 
 ```
-func generateKey(password []byte, salt []byte) []byte {
-  key := pbkdf2.Key(password, salt, 10000, 32, sha256.New)
-  return key
+// generateKey returns a 256-bit key using the given password and salt.
+func generateKey(pass []byte, salt []byte) []byte {
+  return pbkdf2.Key(pass, salt, 10000, 32, sha256.New)
 }
 ```
 
-This uses the pseudorandom `sha256.New` function to create an instance of the SHA-256 hash function. Both of the `Decrypt` and `Encrypt` functions are reliant on the `generateKey` function.
+This uses the `sha256.New` function to create an instance of the SHA-256 hash function.
 
 The `Encrypt` functions goes as follows:
 
@@ -230,16 +234,20 @@ func Encrypt(plaintext []byte, password []byte) ([]byte, error) {
 }
 ```
 
-The encrypt function creates a salt to generate a new key. Should be noted that this design makes it so that each new message results in a newly generated key. Updating the key for every new messages has the added benefit of making it so that in the case that a key is compromised, the rest of the messages will be made unavailable to the attacker. The fact that the users are able to build the same key--that is, they don't actually have to transmit the key--makes generating a key for every a plausible way forward. Next, a AES block cipher is created using the key, followed by the creations of initialization vector (IV). The IV ensures that if the same message is sent repeatedly, the ciphertext will differ for each message. This eliminates potential patterns that would be visible to a keen attacker. Cipher Block Chaining (CBC) mode of operation is desirable in this use case as it provides confidentially and message integrity.
+The `encrypt` function creates a salt to generate a new key. It should be noted that this design results in each new message using a newly generated key. Updating the key for every new messages means that, in the case of a key being compromised, the rest of the messages will be made unavailable to the attacker. The fact that the users are able to build the same key--that is, they don't actually have to transmit the key--makes generating a key for every message feasible. Next, a AES block cipher is created using the key, followed by the creation of an Initialization Vector (IV). The IV ensures that if the same message is sent repeatedly, the ciphertext will differ for each message. This eliminates potential patterns that would be visible to a keen attacker. Cipher Block Chaining (CBC) mode of operation is desirable in this use case as it establishes confidentially and message integrity.
 
-The plaintext is padding using PKCS #7 to pad the data to a multiple of 16 bytes. PKCS7 padding works as follows: if message is not a multiple of 16 bytes long, count the number $n$ of bytes it would take to pad to a multiple of 16; append the number $n$ until you reach the multiple of 16 bytes. If number of padding bytes is 0, then we don't need to do anything since it is already a multiple of 16. The corresponding code is shown below.
+PKCS #7 is used to pad the plaintext to a multiple of 16 bytes. PKCS7 padding works as follows: if message is not a multiple of 16 bytes long, count the number $n$ of bytes it would take to pad to a multiple of 16; append $n$ bytes. If the number of padding bytes is 0, then we don't need to do anything since it is already a multiple of 16. The corresponding code is shown below:
 
 ```
-func pkcs7Padding(plaintext []byte, blockSize int) []byte {
-  // How many bytes to get to 16?
-  paddingSize := blockSize - (len(plaintext) % blockSize)
-  // Create a list of length `paddingSize` that consists of values all equal to `paddingSize`.
-  padding := bytes.Repeat([]byte{byte(paddingSize)}, paddingSize)
+// pkcs7Padding returns the input plaintext padded with PKCS#7 padding.
+func pkcs7Padding(plaintext []byte, paddingSize int) []byte {
+  // Add padding to the end of the plaintext to make its length a
+  // multiple of the block size.
+  padSize := paddingSize - (len(plaintext) % paddingSize)
+
+  // Create a list of length `paddingSize` that consists of values all
+  // equal to `paddingSize`.
+  padding := bytes.Repeat([]byte{byte(padSize)}, padSize)
   return append(plaintext, padding...)
 }
 ```
@@ -288,19 +296,19 @@ func Decrypt(ciphertext []byte, password []byte) ([]byte, error) {
 }
 ```
 
-Here, we first extract the salt and IV from the encrypted message which leaves us with just the ciphertext. Like in the `Encrypt` function, we generate the key using the shared password and salt. We create an AES cipher block using the key and specify the mode to be CBC. `CryptBlocks` is applied to decrypt the ciphertext accordingly. At this point, we are left with the plaintext with some padded information. We are able to get rid of the extra data using the `pkcs7Unpadding` function. We get the last byte which represents the number of bytes that needed to be padded. We use this value to return a slice that removes the padding.
+Here, we first extract the salt and IV from the encrypted message which leaves us with just the ciphertext. Like in the `Encrypt` function, we generate the key using the shared password and salt. We create an AES cipher block using the key and specify the mode to be CBC. `CryptBlocks` is applied to decrypt the ciphertext accordingly. At this point, we are just left with the plaintext and some padded information. We are able to get rid of the extra data using the `pkcs7Unpadding` function. We get the last byte which represents the number of bytes that needed to be padded. We use this value to return a slice that removes the padding.
 
 ```
+// pkcs7Unpadding returns a byte slice that leaves out the PKCS#7
+// padding from the given plaintext.
 func pkcs7Unpadding(plaintext []byte) ([]byte, error) {
-  // How many bytes need to be padded?
-  paddingSize := int(plaintext[len(plaintext)-1])
+  paddingSize := int(plaintext[len(plaintext)-1]) // bytes that were added
   if paddingSize > len(plaintext) {
+    fmt.Printf("paddingsize= %d, length %d\n", paddingSize, len(plaintext))
     return nil, errors.New("invalid padding")
   }
-
-  // Returned the sliced array leaving out the padding
   return plaintext[:len(plaintext)-paddingSize], nil
 }
 ```
 
-Once we have successfully unpadded we are left with the original plaintext, in which it is returned to be printed out to the user.
+Once we have successfully unpadded we are left with the original plaintext. The plaintext is returned and printed to the user.

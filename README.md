@@ -1,11 +1,42 @@
-# Secure Instant Point-to-Point (P2P) Messaging
+# Point-to-Point (P2P) Encrypted Messaging
 
-This project is a secure instant messaging tool written in Go. The system supports the following functions
+This project implements a simple Point-to-Point encrypted messaging system using AES encryption. The system includes both server and client. It allows two parties to establish a secure session to send messages to one another. The communication between both parties is encrypted with a password-derived key.
 
-* Alice and Bob can use the tool to send messages to each other.
-* Alice and Bob share the same password, they must use the password to set up the tool to correctly encrypt and decrypt messages shared between each other.
-* Each message during Internet transmission must be encrypted using a key no less than 56 bits.
+See the [report](./report.md) for a detailed breakdown of how this system works.
+
+## Features
+
+* Point-to-Point communication over TCP.
+* AES encryption using CBC mode.
+* Password-based key generation with PBKDF2 and SHA-256.
+* PKCS#7 padding.
+
+## Usage
+
+### Server
+
+Starting the server:
+
+```
+go run main.go server [host] [port]
+```
+
+Replace `[host]` and `[port]` with desired host and port.
+
+### Client
+
+Starting the client:
+
+```
+go run main.go client [host] [port]
+```
+
+Replace `[host]` and `[port]` with desired host and port.
+
+### Password
+
+Both the server and client will prompt for a password. Enter the same password on both sides to establish a secure connection.
 
 ## Design considerations
 
-This makes the assumption that Alice and Bob share a secret (password), and are therefor able to utilize the benefits of symmetric key cryptography for the Internet transmission.
+This tool makes the assumption that Alice and Bob share a secret (password), and are therefore able to utilize the benefits of symmetric key cryptography for the Internet transmission.
