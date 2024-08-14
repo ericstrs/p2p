@@ -59,7 +59,6 @@ func Server(host, port string) {
 
 		// Send encrypted message
 		fmt.Fprintf(conn, "%s\n", ciphertext)
-		fmt.Printf("Sent ciphertext: %q\n\n", ciphertext)
 	}
 
 	if err := s.Err(); err != nil {
@@ -106,7 +105,6 @@ func Client(host, port string) {
 
 		// Send encrypted message
 		fmt.Fprintf(conn, "%s\n", ciphertext)
-		fmt.Printf("Sent ciphertext: %q\n\n", ciphertext)
 	}
 
 	if err := s.Err(); err != nil {
@@ -114,6 +112,8 @@ func Client(host, port string) {
 	}
 }
 
+// handleMessages receives encrypted messages from a connection,
+// decrypts them, and prints them to stdout.
 func handleMessages(conn net.Conn, password []byte) {
 	buffer := make([]byte, 4096)
 	for {
@@ -130,8 +130,6 @@ func handleMessages(conn net.Conn, password []byte) {
 
 		// Remove newline
 		ciphertext := buffer[:n-1]
-
-		fmt.Printf("Received ciphertext: %q\n", ciphertext)
 
 		// Decrypt the ciphertext
 		plaintext, err := Decrypt(ciphertext, []byte(password))
