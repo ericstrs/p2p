@@ -13,10 +13,9 @@ import (
 	"golang.org/x/crypto/pbkdf2"
 )
 
-// generateKey returns a 32-byte key using the given password and salt.
+// generateKey returns a 256-bit key using the given password and salt.
 func generateKey(pass []byte, salt []byte) []byte {
-	key := pbkdf2.Key(pass, salt, 10000, 32, sha256.New)
-	return key
+	return pbkdf2.Key(pass, salt, 10000, 32, sha256.New)
 }
 
 // Encrypt returns ciphertext for a given body of plaintext.
