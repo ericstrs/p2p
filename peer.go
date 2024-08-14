@@ -9,9 +9,10 @@ import (
 	"os"
 )
 
-func Server(port string) {
+// Server receives and serves encrypted messages to another party.
+func Server(host, port string) {
 	// Listen for connection
-	addr := "localhost:" + port
+	addr := host + ":" + port
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Printf("Error: Could not listen on %s: %v\n", addr, err)
@@ -66,10 +67,10 @@ func Server(port string) {
 	}
 }
 
-func Client(port string) {
-
+// Client receives and serves encrypted messages to another party.
+func Client(host, port string) {
 	// Connect to server
-	addr := "localhost:" + port
+	addr := host + ":" + port
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		log.Printf("Error: Could connect to %s: %v\n", addr, err)
